@@ -1,0 +1,272 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOAA Augmented Reality 3D Model</title>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'fontawesome/css/all.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/templatemo-style.css' %}">
+    <link href="https://unpkg.com/survey-jquery@1.9.4/modern.css" type="text/css" rel="stylesheet" />
+    <style>
+        body {
+            margin: 0;            /* Reset default margin */
+        }
+        iframe {
+            display: block;       /* iframes are inline by default */
+            background: #000;
+            border: none;         /* Reset default border */
+            height: 100vh;        /* Viewport-relative units */
+            width: 100vw;
+        }
+    </style>
+<!--
+    
+TemplateMo 556 Catalog-Z
+
+https://templatemo.com/tm-556-catalog-z
+
+-->
+</head>
+<body>
+    <!-- Page Loader -->
+    <div id="loader-wrapper">
+        <div id="loader"></div>
+
+        <div class="loader-section section-left"></div>
+        <div class="loader-section section-right"></div>
+
+    </div>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="fas fa-landmark mr-2"></i>
+                Museum of Asian Arts
+            </a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav ml-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link nav-link-1" href="{% url 'home' %}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link nav-link-2 active" aria-current="page" href="#">3D Models</a>
+                </li>
+            </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div id="surveyContainer"></div>
+    <div id="container" style="position: relative;">
+        <img id="webcam" width="200" height="200" hidden/>
+        <div style="position: absolute;">
+            <video autoplay="true" id="videoElement" height="200">
+        </div>
+        <div style="position: absolute;">
+            <button class="btn btn-light btn-lg m-4" onClick="startSurvey()">
+                <a id="backLink">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+            </button>
+        </div>
+        <div style="position: absolute; right: 0;">
+            <button class="btn btn-light btn-lg m-4">AR MODE</button>
+        </div>
+    </div>
+    
+    <!-- Get realtime values from processed frame using socket.io -->
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.min.js"></script>
+    <script src="{% static 'js/plugins.js' %}"></script>
+    <script>
+        $(window).on("load", function() {
+            $('body').addClass('loaded');
+        });
+
+        var video = document.getElementById('videoElement');
+        const socket = io.connect();
+        socket.on("connect", ()=>{
+            console.log("I'm connected!")
+        });
+
+        if (navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    video.srcObject = stream;
+                    setInterval(() => {
+                        socket.emit('frame', {"frame": getFrame()}, function(b64_string) {
+                            webcam.src = b64_string;
+                        });
+                    }, 1000);
+                })
+                .catch(function (err0r) {
+                    console.log("Something went wrong!");
+                });
+        }
+
+        function getFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const data = canvas.toDataURL('image/png');
+            return data;
+        }
+    </script>
+
+    <!-- Collect survey from user after viewing in ar mode using surveyjs -->
+    <script src="https://unpkg.com/survey-jquery@1.9.4/survey.jquery.min.js"></script>
+    <script>
+        function startSurvey() {
+            window.onbeforeunload = function() {
+                return 'You have unsaved changes!';
+            }
+            document.getElementById('container').style.display = 'none';
+            document.getElementsByTagName('canvas')[0].style.display = 'none';
+            Survey.StylesManager.applyTheme("modern");
+            var url = "{% static 'surveyform/survey.json' %}";
+            var surveyJSON = '';
+            $.ajax({
+                type: 'GET',
+                url: url,
+                dataType: 'json',
+                success: function(data) {
+                    console.log(data);
+                    surveyJSON = data;
+                },
+                async: false
+            });
+            var survey = new Survey.Model(surveyJSON);
+            $("#surveyContainer").Survey({
+                model: survey,
+                onComplete: sendDataToServer
+            });
+        }
+        function sendDataToServer(survey) {
+            window.onbeforeunload = null;
+            $.ajax({
+                type: "POST",
+                url: '/handle_new_survey_data',
+                data: {
+                    data : JSON.stringify(survey.data),
+                    csrfmiddlewaretoken: '{{ csrf_token }}',
+                },
+                complete:function(){
+                    document.location.href = "{% url 'home' %}";
+                },
+            });
+        }
+    </script>
+
+    <script charset="utf-8" type="text/javascript">
+        var dist, x_pos, y_pos, frame_w, frame_h;
+
+        socket.on("response", (dict)=>{
+            dist = dict["dist"];
+            x_pos = dict["x_pos"];
+            y_pos = dict["y_pos"];
+            frame_w = dict["frame_w"];
+            frame_h = dict["frame_h"];
+        });
+    </script>
+
+    <!-- Create ar scene using three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/87/three.min.js"></script>
+    <script src="{% static 'js/OrbitControls.js' %}"></script>
+    <script src="{% static 'js/MTLLoader.js' %}"></script>
+    <script src="{% static 'js/OBJLoader.js' %}"></script>
+    <script>
+        var camera, scene, renderer;
+        init();
+        function init() {
+
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+            camera.position.set(0, 80, 180); // ori 20, 40, 50
+            camera.lookAt(scene.position);
+            
+            const vFOV = (camera.fov * Math.PI) / 180;
+            const height = 2 * Math.tan(vFOV / 2) * Math.abs(camera.position.z);
+            const width = height * camera.aspect;
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            var controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.campingFactor = 0.25;
+            controls.enableZoom = true;
+
+            var webcam_img = document.getElementById('webcam');
+            var canvas = document.createElement("canvas");
+            canvas.width = 1024;
+            canvas.height = 256;
+            var canvasContext = canvas.getContext("2d");
+            canvasContext.drawImage(webcam_img, 0, 0, canvas.width, canvas.height);
+            var videoTexture = new THREE.Texture(canvas);
+            scene.background = videoTexture;
+            
+            var keyLight = new THREE.DirectionalLight(new THREE.Color('hsl(30, 100%, 75%)'), 1.0);
+            keyLight.position.set(-100, 0, 100);
+            
+            var fillLight = new THREE.DirectionalLight(new THREE.Color('hsl(240, 100%, 75%)'), 0.75);
+            fillLight.position.set(100, 0, 100);
+            
+            var backLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            backLight.position.set(100, 0, -100).normalize();
+            
+            scene.add(keyLight);
+            scene.add(fillLight);
+            scene.add(backLight);
+
+            var obj;
+            var mtlLoader = new THREE.MTLLoader();
+            mtlLoader.setTexturePath("{{materials_path}}");
+            mtlLoader.setPath("{{materials_path}}");
+            mtlLoader.load("{{mtl_fname}}", function(materials) {
+                materials.preload();
+
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setMaterials(materials);
+                objLoader.setPath("{{materials_path}}");
+                objLoader.load("{{obj_fname}}", function(object) {
+                    obj = object;
+                    var scale = dist / 20 * 10;
+                    obj.scale.set(scale, scale, scale);
+                    obj.position.x = (x_pos - frame_w / 2) * width / frame_w;
+                    obj.position.y = - (y_pos - frame_h / 2) * height / frame_h;
+                    scene.add(object);
+                });
+            });
+            
+            var animate = function () {
+                requestAnimationFrame(animate);
+                updateCanvas();
+                videoTexture.needsUpdate = true;
+                if(obj) {
+                    var scale = dist / 20 * 10;
+                    obj.scale.set(scale, scale, scale);
+                    obj.position.x = (x_pos - frame_w / 2) * width / frame_w;
+                    obj.position.y = - (y_pos - frame_h / 2) * height / frame_h;
+                }
+                controls.update();
+                renderer.render(scene, camera);
+            };
+
+            function updateCanvas() {
+                canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+                canvasContext.drawImage(webcam_img, 0, 0, canvas.width, canvas.height);
+                requestAnimationFrame(updateCanvas);
+            }
+
+            animate();
+        }
+    </script>
+</body>
+</html>
