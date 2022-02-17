@@ -1,0 +1,21 @@
+-f https://download.pytorch.org/whl/torch_stable.html
+bidict==0.21.4
+boto3==1.20.31
+dj_database_url==0.5.0
+Django==4.0.1
+django-storages==1.12.3
+dnspython==1.16.0
+eventlet==0.30.2
+greenlet==1.1.2
+gunicorn==20.1.0
+matplotlib==3.5.1
+numpy==1.21.4
+opencv-python-headless==4.5.4.58
+Pillow==9.0.0
+python-engineio==4.3.0
+python-socketio==5.5.0
+requests==2.26.0
+torch==1.8.1+cpu
+torchvision==0.9.1+cpu
+psycopg2==2.9.3
+whitenoise==5.2.0
